@@ -4,6 +4,7 @@ namespace Rhymix\Modules\Oembed\Models;
 
 use FileHandler;
 use FileModel;
+use FileController;
 
 /**
  * OG 이미지를 외부 호스트에서 받아 file 모듈의 첨부 흐름에 태운다.
@@ -108,7 +109,7 @@ class ImageAttacher
       'type' => $mime,
     ];
 
-    $oFileController = \getController('file');
+    $oFileController = FileController::getInstance();
     try {
       // manual_insert=false: 게시판/세션의 허용 확장자·파일 크기·총 첨부
       // 용량 정책을 file 모듈이 그대로 적용한다. 정책 위반은
