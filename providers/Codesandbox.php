@@ -25,7 +25,7 @@ class Codesandbox extends Provider
   // 좁은 패턴(named path) 을 먼저, csb.app 단축 도메인을 나중에.
   public array $patterns = [
     '~(?:https?:)?//(?:www\.)?codesandbox\.io/(?:s|embed|p/sandbox)/([^?\s]+)~i' => ['sandbox_id'],
-    '~(?:https?:)?//(\w{5,6})\.csb\.app~i' => ['sandbox_id'],
+    '~(?:https?:)?//(\w{6})\.csb\.app~i' => ['sandbox_id'],
   ];
 
   public function buildEmbed(array $matchData, ?int $width = null, ?int $height = null): string
@@ -50,10 +50,10 @@ class Codesandbox extends Provider
   {
     // 공식 oEmbed — 섬네일 URL 을 얻어 본문 첨부로 등록.
     // sandbox ID 를 추출해 s/ 형태로 정규화한 URL 을 oEmbed 에 전달.
-    if (!preg_match('~(?:https?:)?//(?:(?:www\.)?codesandbox\.io/(?:s|embed|p/sandbox)/([^?\s]+)|(\w{5,6})\.csb\.app)~i', $url, $m)) {
+    if (!preg_match('~(?:https?:)?//(?:(?:www\.)?codesandbox\.io/(?:s|embed|p/sandbox)/([^?\s]+)|(\w{6})\.csb\.app)~i', $url, $m)) {
       return null;
     }
-    $sandboxId = $m[1] !== '' ? $m[1] : ($m[2] ?? '');
+    $sandboxId = !empty($m[1]) ? $m[1] : ($m[2] ?? '');
     if ($sandboxId === '') {
       return null;
     }

@@ -58,7 +58,8 @@ class Dailymotion extends Provider
 
   public function fetchInfo(string $url): ?array
   {
-    // 동영상 ID 추출 — playlist 나 인식 실패는 null 반환으로 폴백.
+    // fetchInfo 는 URL 문자열만 받으므로 video ID 재추출이 필요.
+    // playlist URL 은 Dailymotion 공개 API 가 인증을 요구하므로 스킵하고 null 반환.
     if (!preg_match('~(?:https?:)?//(?:www\.)?(?:dailymotion\.com/(?:video/)?|dai\.ly/)([-_0-9a-zA-Z]+)~i', $url, $m)) {
       return null;
     }

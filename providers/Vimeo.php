@@ -19,8 +19,18 @@ class Vimeo extends Provider
   public bool $oembed = false;
   public array $hosts = ['vimeo.com', 'www.vimeo.com', 'player.vimeo.com'];
   // vimeo.com 경로에는 #t= 앵커가 올 수 있으므로 ~ delimiter 사용.
+  // 각 URL 유형을 독립 패턴으로 분리해 가독성과 유지보수성을 높인다.
   public array $patterns = [
-    '~(?:https?:)?//(?:www\.|player\.)?vimeo\.com/(?:(?:channels|event|ondemand)/(?:\w+/)?|(?:album|groups)/[^/]*/videos/|video/|)(\d+)((?:#t=[^&\s]*)?)~i' => ['video_id', 'anchor'],
+    // player.vimeo.com 임베드 URL
+    '~(?:https?:)?//player\.vimeo\.com/video/(\d+)((?:#t=[^&\s]*)?)~i' => ['video_id', 'anchor'],
+    // channels / event / ondemand: vimeo.com/{type}/{channel?}/{id}
+    '~(?:https?:)?//(?:www\.)?vimeo\.com/(?:channels|event|ondemand)/(?:\w+/)?(\d+)((?:#t=[^&\s]*)?)~i' => ['video_id', 'anchor'],
+    // album / groups: vimeo.com/{type}/{name}/videos/{id}
+    '~(?:https?:)?//(?:www\.)?vimeo\.com/(?:album|groups)/[^/]*/videos/(\d+)((?:#t=[^&\s]*)?)~i' => ['video_id', 'anchor'],
+    // 명시적 video 경로: vimeo.com/video/{id}
+    '~(?:https?:)?//(?:www\.)?vimeo\.com/video/(\d+)((?:#t=[^&\s]*)?)~i' => ['video_id', 'anchor'],
+    // 직접 링크: vimeo.com/{id}
+    '~(?:https?:)?//(?:www\.)?vimeo\.com/(\d+)((?:#t=[^&\s]*)?)~i' => ['video_id', 'anchor'],
   ];
 
   public function buildEmbed(array $matchData, ?int $width = null, ?int $height = null): string
