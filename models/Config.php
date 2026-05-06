@@ -16,7 +16,7 @@ class Config
    * 목록만 활성화 상태로 시드되고, providers/ 디렉터리에 추가된 새
    * 파일은 운영자가 어드민에서 명시적으로 켜야만 동작한다 (보안 정책).
    */
-  public const BUNDLED_PROVIDERS = ['Youtube', 'Facebook', 'Instagram', 'X', 'Reddit', 'Chzzk'];
+  public const BUNDLED_PROVIDERS = ['Youtube', 'Facebook', 'Instagram', 'X', 'Reddit', 'Chzzk', 'Pixiv'];
 
   public static function getConfig(): object
   {
