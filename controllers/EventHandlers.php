@@ -7,6 +7,7 @@ use Rhymix\Modules\Oembed\Models\Registry;
 use BaseObject;
 use Context;
 use EditorModel;
+use FileController;
 use FileModel;
 use ModuleModel;
 
@@ -86,9 +87,9 @@ class EventHandlers extends Base
       if ($editorSkin !== 'editorxe') {
         return;
       }
-      Context::addCssFile($modulePath . 'tpl/css/style.css');
+      Context::loadFile(array($modulePath . 'tpl/css/style.css', '', '', null), true);
       if (is_file(\RX_BASEDIR . ltrim($skinCssPath, '/'))) {
-        Context::addCssFile($skinCssPath);
+        Context::loadFile(array($skinCssPath, '', '', null), true);
       }
       // style.css 의 editor 전용 규칙은 wysiwyg 영역 (iframe / divarea) 안에서만
       // 의미가 있고, Context::addCssFile 로 외부 로드 시 Rhymix 가 minify
@@ -102,15 +103,15 @@ class EventHandlers extends Base
         $editorCssContent = (string) file_get_contents($editorCssFullPath);
         Context::addHtmlHeader('<script>window.oembedEditorCss=' . json_encode($editorCssContent, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . ';</script>');
       }
-      Context::addJsFile($modulePath . 'tpl/js/_editorxe.js', '', '', 0, 'body');
+      Context::loadFile(array($modulePath . 'tpl/js/_editorxe.js', 'body', '', null), true);
       Context::addHtmlHeader('<script>window.current_mid=' . json_encode((string) $mid) . ';</script>');
       return;
     }
 
     // VIEW_ACTS — 본문에 카드/임베드 마크업이 노출되는 페이지
-    Context::addCssFile($modulePath . 'tpl/css/style.css');
+    Context::loadFile(array($modulePath . 'tpl/css/style.css', '', '', null), true);
     if (is_file(\RX_BASEDIR . ltrim($skinCssPath, '/'))) {
-      Context::addCssFile($skinCssPath);
+      Context::loadFile(array($skinCssPath, '', '', null), true);
     }
 
     $assets = $this->collectProviderEmbedAssets();
@@ -127,7 +128,13 @@ class EventHandlers extends Base
       json_encode($assets, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP),
       $compatibleMode ? 'true' : 'false'
     ));
-    Context::addJsFile($modulePath . 'tpl/js/_render.js', '', '', 0, 'body');
+    Context::loadFile(array($modulePath . 'tpl/js/_render.js', 'body', '', null), true);
+
+    if($compatibleMode) {
+      $previewFolder = \RX_BASEDIR . 'modules/preview/';
+      Context::loadFile(array($previewFolder . 'tpl/css/media_embed.css', '', '', null), true);
+      Context::loadFile(array($previewFolder . 'skins/default/preview_card_style.css', '', '', null), true);
+    }
   }
 
   /**
@@ -193,7 +200,7 @@ class EventHandlers extends Base
       return new BaseObject();
     }
 
-    $oFileController = \getController('file');
+    $oFileController = FileController::getInstance();
     foreach ($files as $file) {
       $fileSrl = (int) ($file->file_srl ?? 0);
       if ($fileSrl <= 0) {

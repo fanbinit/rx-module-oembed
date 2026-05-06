@@ -12,10 +12,6 @@
 (function (window) {
   'use strict';
 
-  if (!window.tmpPreviewIntyMce) {
-    return;
-  }
-
   var URL_PATTERN = /(?:https?:)?\/\/[^\s<>"]+/i;
   var FAILED_HOSTS_KEY = 'oembed:failed_hosts';
   var FAILED_HOST_TTL_MS = 60 * 60 * 1000; // 1 시간
