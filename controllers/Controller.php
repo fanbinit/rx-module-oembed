@@ -101,6 +101,17 @@ class Controller extends Base
     }
 
     // OG 카드 흐름 (v0.2.0+)
+    // 팬비닛에서는 OFF(단순 링크로 처리)
+    $wrappedHtml = sprintf(
+      '<a href="%s" target="_blank" rel="noopener">%s</a>',
+      htmlspecialchars($url, ENT_QUOTES, 'UTF-8'),
+      htmlspecialchars($url, ENT_QUOTES, 'UTF-8')
+    );
+
+    $this->add('kind', 'card');
+    $this->add('wrapped_html', $wrappedHtml);
+    $this->add('url', $url);
+    /*
     $fetched = RemoteFetcher::fetchHtml($url);
     if ($fetched === null) {
       $this->add('kind', 'fail');
@@ -157,6 +168,7 @@ class Controller extends Base
     if ($attachedFileSrl > 0) {
       $this->add('file_srl', $attachedFileSrl);
     }
+    */
   }
 
   private function shortName(Provider $provider): string
