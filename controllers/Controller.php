@@ -51,53 +51,53 @@ class Controller extends Base
       [$resolvedWidth, $resolvedHeight] = $provider->getDimensions($width, $height);
 
       $embedHtml = $provider->buildEmbed($matchData, $resolvedWidth, $resolvedHeight);
-      if ($embedHtml === '') {
-        $this->add('kind', 'fail');
+
+      if ($embedHtml !== '') {
+        // 섬네일 첨부 등록 — OG 카드 분기와 동일 패턴. 본문 markup 자체는 변하지
+        // 않고, file 모듈을 통해 첨부 파일 1개가 새 글에 묶인다 (게시판 자동
+        // 섬네일 / 첨부 목록 / RSS 미리보기 등에서 활용 가능). 실패해도 임베드
+        // 출력엔 영향 없음.
+        $editorSequence = (int) Context::get('editor_sequence');
+        $attachedFileSrl = 0;
+        if ($info !== null && !empty($info['thumbnail_url'])) {
+          $attached = ImageAttacher::attach($info['thumbnail_url'], $editorSequence);
+          if ($attached !== null) {
+            $attachedFileSrl = $attached['file_srl'];
+          }
+        }
+
+        $providerShort = $this->shortName($provider);
+        // wrapper 의 data-oembed-file-srl 은 EventHandlers::pruneOrphanedOembedFiles
+        // 가 본문 저장 시점에 첨부를 보존하기 위한 anchor — 빠지면 고아로 회수된다.
+        $fileSrlAttr = $attachedFileSrl > 0
+          ? sprintf(' data-oembed-file-srl="%d"', $attachedFileSrl)
+          : '';
+        $wrappedHtml = sprintf(
+          '<div editor_component="oembed" data-oembed-type="%s" data-oembed-provider="%s" data-url="%s"%s contenteditable="false">%s</div>',
+          htmlspecialchars($provider->type, ENT_QUOTES, 'UTF-8'),
+          htmlspecialchars($providerShort, ENT_QUOTES, 'UTF-8'),
+          htmlspecialchars($url, ENT_QUOTES, 'UTF-8'),
+          $fileSrlAttr,
+          $embedHtml
+        );
+
+        $this->add('kind', 'embed');
+        $this->add('wrapped_html', $wrappedHtml);
+        $this->add('url', $url);
+        $this->add('provider', $providerShort);
+        // OG 카드 분기와 동일: 새 upload_target_srl 을 클라이언트에 알려 폼의
+        // document_srl hidden 필드를 동기화하고, 응답 stale 시 procFileDelete 로
+        // 회수할 수 있게 file_srl 도 함께 내려보낸다.
+        if ($editorSequence && !empty($_SESSION['upload_info'][$editorSequence]->upload_target_srl)) {
+          $this->add('upload_target_srl', (int) $_SESSION['upload_info'][$editorSequence]->upload_target_srl);
+        }
+        if ($attachedFileSrl > 0) {
+          $this->add('file_srl', $attachedFileSrl);
+        }
         return;
       }
-
-      // 섬네일 첨부 등록 — OG 카드 분기와 동일 패턴. 본문 markup 자체는 변하지
-      // 않고, file 모듈을 통해 첨부 파일 1개가 새 글에 묶인다 (게시판 자동
-      // 섬네일 / 첨부 목록 / RSS 미리보기 등에서 활용 가능). 실패해도 임베드
-      // 출력엔 영향 없음.
-      $editorSequence = (int) Context::get('editor_sequence');
-      $attachedFileSrl = 0;
-      if ($info !== null && !empty($info['thumbnail_url'])) {
-        $attached = ImageAttacher::attach($info['thumbnail_url'], $editorSequence);
-        if ($attached !== null) {
-          $attachedFileSrl = $attached['file_srl'];
-        }
-      }
-
-      $providerShort = $this->shortName($provider);
-      // wrapper 의 data-oembed-file-srl 은 EventHandlers::pruneOrphanedOembedFiles
-      // 가 본문 저장 시점에 첨부를 보존하기 위한 anchor — 빠지면 고아로 회수된다.
-      $fileSrlAttr = $attachedFileSrl > 0
-        ? sprintf(' data-oembed-file-srl="%d"', $attachedFileSrl)
-        : '';
-      $wrappedHtml = sprintf(
-        '<div editor_component="oembed" data-oembed-type="%s" data-oembed-provider="%s" data-url="%s"%s contenteditable="false">%s</div>',
-        htmlspecialchars($provider->type, ENT_QUOTES, 'UTF-8'),
-        htmlspecialchars($providerShort, ENT_QUOTES, 'UTF-8'),
-        htmlspecialchars($url, ENT_QUOTES, 'UTF-8'),
-        $fileSrlAttr,
-        $embedHtml
-      );
-
-      $this->add('kind', 'embed');
-      $this->add('wrapped_html', $wrappedHtml);
-      $this->add('url', $url);
-      $this->add('provider', $providerShort);
-      // OG 카드 분기와 동일: 새 upload_target_srl 을 클라이언트에 알려 폼의
-      // document_srl hidden 필드를 동기화하고, 응답 stale 시 procFileDelete 로
-      // 회수할 수 있게 file_srl 도 함께 내려보낸다.
-      if ($editorSequence && !empty($_SESSION['upload_info'][$editorSequence]->upload_target_srl)) {
-        $this->add('upload_target_srl', (int) $_SESSION['upload_info'][$editorSequence]->upload_target_srl);
-      }
-      if ($attachedFileSrl > 0) {
-        $this->add('file_srl', $attachedFileSrl);
-      }
-      return;
+      // embedHtml === '' → provider 가 빈 문자열을 반환(예: pixiv 비공개 작품).
+      // 바로 fail 을 내리는 대신 OG 카드 경로로 폴백해 메타정보라도 표시한다.
     }
 
     // OG 카드 흐름 (v0.2.0+)
