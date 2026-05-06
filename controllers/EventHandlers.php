@@ -83,7 +83,7 @@ class EventHandlers extends Base
       $editorSkin = $act === 'dispBoardWrite'
         ? ($editorConfig->editor_skin ?? '')
         : ($editorConfig->comment_editor_skin ?? '');
-      if ($editorSkin !== 'ckeditor') {
+      if ($editorSkin !== 'editorxe') {
         return;
       }
       Context::addCssFile($modulePath . 'tpl/css/style.css');
@@ -95,14 +95,14 @@ class EventHandlers extends Base
       // 산출물의 mtime 으로 ?t= 캐시버스터를 박는데 그 mtime 이 stale 하게 굳는
       // 환경에서는 CKEditor 가 옛 URL 만 contentsCss 로 전달해 갱신이 안 된다.
       // 매 요청마다 파일 내용을 그대로 읽어 inline payload 로 emit 하고,
-      // _ckeditor.js 가 CKEDITOR.addCss + 인스턴스 document 에 직접 <style>
+      // _editorxe.js 가 CKEDITOR.addCss + 인스턴스 document 에 직접 <style>
       // 주입한다.
       $editorCssFullPath = \RX_BASEDIR . 'modules/oembed/tpl/css/style.css';
       if (is_file($editorCssFullPath)) {
         $editorCssContent = (string) file_get_contents($editorCssFullPath);
         Context::addHtmlHeader('<script>window.oembedEditorCss=' . json_encode($editorCssContent, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . ';</script>');
       }
-      Context::addJsFile($modulePath . 'tpl/js/_ckeditor.js', '', '', 0, 'body');
+      Context::addJsFile($modulePath . 'tpl/js/_editorxe.js', '', '', 0, 'body');
       Context::addHtmlHeader('<script>window.current_mid=' . json_encode((string) $mid) . ';</script>');
       return;
     }
