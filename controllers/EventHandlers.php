@@ -4,6 +4,7 @@ namespace Rhymix\Modules\Oembed\Controllers;
 
 use Rhymix\Modules\Oembed\Models\Config as ConfigModel;
 use Rhymix\Modules\Oembed\Models\Registry;
+use Rhymix\Framework\Filters\MediaFilter;
 use BaseObject;
 use Context;
 use EditorModel;
@@ -17,10 +18,7 @@ class EventHandlers extends Base
     'dispBoardWrite', 'dispBoardWriteComment', 'dispBoardReplyComment', 'dispBoardModifyComment',
   ];
   private const VIEW_ACTS = [
-    'dispBoardContent', 'dispDocumentPrint', 'dispDocumentPreview', 'dispTrashAdminView',
-    // 어드민 신고/검토 화면 — 본문/댓글이 그대로 노출되므로 카드 자산이 필요.
-    'dispDocumentAdminDeclared', 'dispDocumentAdminDeclaredLogByDocumentSrl',
-    'dispCommentAdminDeclared', 'dispCommentAdminDeclaredLogByCommentSrl',
+    'dispBoardContent', 'dispDocumentPrint', 'dispDocumentPreview',
   ];
 
   /**
@@ -123,10 +121,25 @@ class EventHandlers extends Base
     // _render.js 는 DOM 스캔 후 매칭된 SDK 를 head 에 주입한다.
     // 어떤 provider 의 selector 가 어떤 script URL 로 매핑되는지는 이
     // inline payload 로 전달하므로, _render.js 자체는 데이터를 모른다.
+    //
+    // 호환 모드의 lazy iframe (.media_embed_wrapper iframe[data-src]) 활성화
+    // 시 host 검증에 쓸 화이트리스트 정규식을 함께 노출. MediaFilter 가
+    // 반환하는 PCRE 는 `%...%` delimiter 형태이므로 양 끝 한 글자씩 떼어
+    // JS RegExp 본문으로 변환한다 (현재 구현은 항상 '%' delimiter 를 사용).
+    // 호환 모드 OFF 인 경우 payload 자체를 보내지 않아 _render.js 가
+    // fail-closed.
+    $iframeWhitelist = '';
+    if ($compatibleMode) {
+      $regex = MediaFilter::getWhitelistRegex();
+      if ($regex !== '' && strlen($regex) >= 2) {
+        $iframeWhitelist = substr($regex, 1, -1);
+      }
+    }
     Context::addHtmlHeader(sprintf(
-      '<script>window.oembedEmbedAssets=%s;window.oembedCompatibleMode=%s;</script>',
+      '<script>window.oembedEmbedAssets=%s;window.oembedCompatibleMode=%s;window.oembedIframeWhitelist=%s;</script>',
       json_encode($assets, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP),
-      $compatibleMode ? 'true' : 'false'
+      $compatibleMode ? 'true' : 'false',
+      json_encode($iframeWhitelist, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP)
     ));
     Context::loadFile(array($modulePath . 'tpl/js/_render.js', 'body', '', null), true);
 

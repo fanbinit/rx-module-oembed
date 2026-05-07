@@ -23,7 +23,7 @@ class Config
     if (self::$cache === null) {
       $config = ModuleModel::getModuleConfig('oembed');
       self::$cache = is_object($config) ? $config : new \stdClass();
-      self::$cache->compatible_mode = self::$cache->compatible_mode ?? 'Y';
+      self::$cache->compatible_mode = self::$cache->compatible_mode ?? 'N';
       self::$cache->skin = is_string(self::$cache->skin ?? null) && self::$cache->skin !== ''
         ? self::$cache->skin
         : self::DEFAULT_SKIN;

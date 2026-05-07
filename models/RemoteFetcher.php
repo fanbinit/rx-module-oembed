@@ -59,7 +59,8 @@ class RemoteFetcher
    */
   public static function fetchHtml(string $url): ?array
   {
-    if (!self::isUrlSafe($url)) {
+    $info = self::inspectUrl($url);
+    if ($info === null) {
       return null;
     }
     $response = HTTP::get($url, null, [
@@ -69,7 +70,8 @@ class RemoteFetcher
     ], [], [
       'timeout' => self::TIMEOUT_SECONDS,
       'connect_timeout' => self::TIMEOUT_SECONDS,
-      'allow_redirects' => self::redirectOptions(),
+      'allow_redirects' => self::redirectOptions($info['host'], $info['port']),
+      'curl' => [CURLOPT_RESOLVE => self::buildResolveEntries($info['host'], $info['port'], $info['ips'])],
     ]);
 
     $status = $response->getStatusCode();
@@ -105,7 +107,8 @@ class RemoteFetcher
    */
   public static function fetchJson(string $url): ?array
   {
-    if (!self::isUrlSafe($url)) {
+    $info = self::inspectUrl($url);
+    if ($info === null) {
       return null;
     }
     $response = HTTP::get($url, null, [
@@ -114,7 +117,8 @@ class RemoteFetcher
     ], [], [
       'timeout' => self::TIMEOUT_SECONDS,
       'connect_timeout' => self::TIMEOUT_SECONDS,
-      'allow_redirects' => self::redirectOptions(),
+      'allow_redirects' => self::redirectOptions($info['host'], $info['port']),
+      'curl' => [CURLOPT_RESOLVE => self::buildResolveEntries($info['host'], $info['port'], $info['ips'])],
     ]);
 
     $status = $response->getStatusCode();
@@ -138,7 +142,8 @@ class RemoteFetcher
    */
   public static function fetchImage(string $url): ?array
   {
-    if (!self::isUrlSafe($url)) {
+    $info = self::inspectUrl($url);
+    if ($info === null) {
       return null;
     }
     $response = HTTP::get($url, null, [
@@ -147,7 +152,8 @@ class RemoteFetcher
     ], [], [
       'timeout' => self::TIMEOUT_SECONDS,
       'connect_timeout' => self::TIMEOUT_SECONDS,
-      'allow_redirects' => self::redirectOptions(),
+      'allow_redirects' => self::redirectOptions($info['host'], $info['port']),
+      'curl' => [CURLOPT_RESOLVE => self::buildResolveEntries($info['host'], $info['port'], $info['ips'])],
     ]);
 
     $status = $response->getStatusCode();
@@ -166,49 +172,97 @@ class RemoteFetcher
   }
 
   /**
-   * Validate the input URL.
+   * URL 의 SSRF 안전성을 boolean 으로 알려주는 thin wrapper. 실제 검증
+   * 로직은 inspectUrl() 가 들고 있고 여기서는 결과의 boolean 만 노출한다.
    *  - scheme http/https only
    *  - host present, non-empty
-   *  - DNS resolves to a public IP, or host is itself a public IP literal
+   *  - DNS resolves to public IP only, or host is itself a public IP literal
    */
   public static function isUrlSafe(string $url): bool
   {
-    $parts = parse_url($url);
-    if (!is_array($parts)) {
-      return false;
-    }
-    $scheme = strtolower($parts['scheme'] ?? '');
-    if (!in_array($scheme, ['http', 'https'], true)) {
-      return false;
-    }
-    return self::isHostSafe($parts['host'] ?? '');
+    return self::inspectUrl($url) !== null;
   }
 
   /**
-   * Validate a hostname (or IP literal). Loopback, link-local, RFC1918,
-   * and the cloud-metadata IP are blocked. DNS is resolved to verify
-   * every advertised A/AAAA record points to a public IP.
+   * URL 파싱 + SSRF 검증 + IP-pin 용 정보 수집을 한 번에 수행한다.
+   *
+   * 검증 통과 시 호스트의 정규화된 이름, 명시 또는 scheme 기본값으로
+   * 결정된 port, 그리고 dns_get_record 의 검증 통과 IP 목록을 함께
+   * 반환한다. 이 IP 목록은 곧이어 fetchHtml / fetchJson / fetchImage
+   * 가 cURL 의 CURLOPT_RESOLVE 에 박아서, connect 시점에 DNS 가 다시
+   * 조회되지 않도록 강제하는 데 쓴다 — DNS rebinding TOCTOU 차단의
+   * 핵심.
+   *
+   * @return array{host:string, port:int, ips:array<int,string>}|null
+   */
+  private static function inspectUrl(string $url): ?array
+  {
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+      return null;
+    }
+    $scheme = strtolower($parts['scheme'] ?? '');
+    if (!in_array($scheme, ['http', 'https'], true)) {
+      return null;
+    }
+    $host = $parts['host'] ?? '';
+    $ips = self::resolveHostSafely($host);
+    if ($ips === null) {
+      return null;
+    }
+    return [
+      'host' => strtolower(trim($host, '[]')),
+      'port' => isset($parts['port']) ? (int) $parts['port'] : ($scheme === 'https' ? 443 : 80),
+      'ips' => $ips,
+    ];
+  }
+
+  /**
+   * 호스트가 SSRF 안전한지 boolean 으로 알려주는 thin wrapper. 외부 호환용.
+   * 실제 검증과 IP 추출은 resolveHostSafely() 가 들고 있다.
    */
   public static function isHostSafe(string $host): bool
   {
+    return self::resolveHostSafely($host) !== null;
+  }
+
+  /**
+   * 호스트의 SSRF 안전성을 검증하면서 검증 통과한 IP 목록도 함께 돌려준다.
+   * Loopback, link-local, RFC1918, cloud metadata IP 는 차단된다.
+   * dns_get_record 가 돌려준 모든 A/AAAA 레코드의 IP 가 public 이어야만
+   * 통과한다 — 한 개라도 사설/예약 IP 면 즉시 null 반환.
+   *
+   * 통과 시 그 IP 목록을 그대로 반환하므로, 호출자(inspectUrl) 가 cURL
+   * CURLOPT_RESOLVE 에 박아 실제 connect 단계에서 DNS 가 다시 조회되지
+   * 않게 강제할 수 있다 — 이것이 DNS rebinding 으로 검증 후 IP 가 바꿔
+   * 치기 되는 TOCTOU 우회를 막는 핵심이다.
+   *
+   * IP 리터럴 입력은 그 IP 한 개만 담긴 1-원소 배열을 돌려준다.
+   *
+   * @return array<int,string>|null  안전하면 IPv4/IPv6 문자열 목록(비어있지 않음), 아니면 null
+   */
+  public static function resolveHostSafely(string $host): ?array
+  {
     $host = strtolower(trim($host, '[]'));
     if ($host === '' || $host === 'localhost' || str_ends_with($host, '.localhost')) {
-      return false;
+      return null;
     }
     if (filter_var($host, FILTER_VALIDATE_IP)) {
-      return self::isPublicIp($host);
+      return self::isPublicIp($host) ? [$host] : null;
     }
     $records = @dns_get_record($host, DNS_A | DNS_AAAA) ?: [];
     if (!$records) {
-      return false;
+      return null;
     }
+    $ips = [];
     foreach ($records as $record) {
       $ip = $record['ip'] ?? ($record['ipv6'] ?? '');
       if ($ip === '' || !self::isPublicIp($ip)) {
-        return false;
+        return null;
       }
+      $ips[] = $ip;
     }
-    return true;
+    return $ips !== [] ? $ips : null;
   }
 
   private static function isPublicIp(string $ip): bool
@@ -224,21 +278,60 @@ class RemoteFetcher
   }
 
   /**
+   * Guzzle 의 allow_redirects payload 를 만든다.
+   *
+   * `$expectedHost` / `$expectedPort` 는 첫 hop 의 origin 으로, on_redirect
+   * 콜백이 cross-origin redirect 를 차단하는 데 쓴다. 첫 hop 에서 박은
+   * CURLOPT_RESOLVE 매핑은 정확히 `(host, port)` 한 쌍에만 적용된다 —
+   * 호스트가 같아도 port 가 다르면(예: 80→8080, http→https 업그레이드로
+   * 인한 80↔443) 그 새 origin 은 IP-pin 없이 connect-time 에 새 DNS
+   * resolve 가 일어나 동일한 TOCTOU 가 다시 노출된다. 따라서 host 와 port
+   * 둘 다 첫 hop 과 동일해야만 redirect 를 허용한다.
+   *
+   * 같은 origin 안의 redirect 는 cURL 이 같은 핸들의 resolve 캐시를
+   * 재사용하므로 IP-pin 이 그대로 유효.
+   *
    * @return array<string,mixed>
    */
-  private static function redirectOptions(): array
+  private static function redirectOptions(string $expectedHost, int $expectedPort): array
   {
     return [
       'max' => self::MAX_REDIRECTS,
       'strict' => true,
       'protocols' => ['http', 'https'],
       'track_redirects' => true,
-      'on_redirect' => static function ($request, $response, $uri) {
-        if (!self::isHostSafe($uri->getHost())) {
+      'on_redirect' => static function ($request, $response, $uri) use ($expectedHost, $expectedPort) {
+        $host = strtolower($uri->getHost());
+        // PSR UriInterface::getPort() 는 명시 안 됐을 때 null 반환 → scheme
+        // 기본값으로 폴백한다.
+        $port = $uri->getPort();
+        if ($port === null) {
+          $port = strtolower($uri->getScheme()) === 'https' ? 443 : 80;
+        }
+        if ($host !== $expectedHost || (int) $port !== $expectedPort) {
+          throw new \RuntimeException('oembed: cross-origin redirect blocked');
+        }
+        if (self::resolveHostSafely($host) === null) {
           throw new \RuntimeException('oembed: redirect blocked (unsafe host)');
         }
       },
     ];
+  }
+
+  /**
+   * cURL CURLOPT_RESOLVE entry 형식 (`host:port:ip`) 으로 변환한다. IPv6 는
+   * entry 형식 규약상 IP 부분을 대괄호로 감싼다 (`host:port:[::1]`).
+   *
+   * @param array<int,string> $ips
+   * @return array<int,string>
+   */
+  private static function buildResolveEntries(string $host, int $port, array $ips): array
+  {
+    $entries = [];
+    foreach ($ips as $ip) {
+      $entries[] = sprintf('%s:%d:%s', $host, $port, str_contains($ip, ':') ? "[{$ip}]" : $ip);
+    }
+    return $entries;
   }
 
   /**

@@ -97,12 +97,40 @@
     }
 
     if (window.oembedCompatibleMode === true) {
-      var lazyIframes = document.querySelectorAll('iframe[data-src]');
+      // 다중 방어: (1) 신뢰 wrapper(.media_embed_wrapper) 안의 iframe 만,
+      // (2) http(s) 또는 protocol-relative scheme 만, (3) 서버측 MediaFilter
+      // 화이트리스트 host 정규식 통과한 것만 활성화한다. 검증 실패 시
+      // data-src 자체를 제거해 이후 코드가 다시 승격하지 못하도록 한다.
+      var whitelistRegex = null;
+      if (typeof window.oembedIframeWhitelist === 'string' && window.oembedIframeWhitelist !== '') {
+        try {
+          whitelistRegex = new RegExp(window.oembedIframeWhitelist, 'i');
+        } catch (e) {
+          whitelistRegex = null;
+        }
+      }
+      // fail-closed: 화이트리스트 payload 가 없거나 컴파일 실패면 어떤
+      // data-src 도 활성화하지 않는다.
+      var schemeOk = /^(?:https?:)?\/\/[^\/\\]/i;
+      var lazyIframes = document.querySelectorAll('.media_embed_wrapper iframe[data-src]');
       for (var j = 0; j < lazyIframes.length; j++) {
         var iframe = lazyIframes[j];
         var dataSrc = iframe.getAttribute('data-src');
-        if (dataSrc && !iframe.getAttribute('src')) {
+        if (!dataSrc || iframe.getAttribute('src')) {
+          continue;
+        }
+        var allow = false;
+        if (whitelistRegex && schemeOk.test(dataSrc)) {
+          try {
+            allow = whitelistRegex.test(dataSrc);
+          } catch (e) {
+            allow = false;
+          }
+        }
+        if (allow) {
           iframe.setAttribute('src', dataSrc);
+        } else {
+          iframe.removeAttribute('data-src');
         }
       }
     }
