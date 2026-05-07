@@ -28,19 +28,26 @@ class Admin extends Base
   {
     // 어드민에서는 비활성화된 provider 도 보여야 다시 켤 수 있다.
     $providers = Registry::getProviders(false);
+    $config = ConfigModel::getConfig();
+    $enabledProviderKeys = is_array($config->enabled_providers ?? null) ? $config->enabled_providers : [];
+
     $hostStatus = [];
     $missingHosts = [];
     foreach ($providers as $key => $provider) {
+      // 호스트 뱃지는 비활성 provider 도 그려서 켜기 전에 등록 상태를 미리 확인할 수 있게 둔다.
+      // 다만 상단의 "허용이 필요한 외부 호스트" 안내는 실제로 사용 체크된 provider 만 모은다 —
+      // 사이트 정책상 쓰지 않는 provider 의 호스트까지 등록을 권하지 않는다.
+      $isEnabled = in_array($key, $enabledProviderKeys, true);
       foreach ($provider->getEmbedHosts() as $host) {
         $isWhitelisted = MediaFilter::matchWhitelist('https://' . $host . '/');
         $hostStatus[$key][$host] = $isWhitelisted;
-        if (!$isWhitelisted) {
+        if (!$isWhitelisted && $isEnabled) {
           $missingHosts[$host] = true;
         }
       }
     }
 
-    Context::set('oembed_config', ConfigModel::getConfig());
+    Context::set('oembed_config', $config);
     Context::set('oembed_preview_active', ConfigModel::isPreviewModuleActive());
     Context::set('oembed_providers', $providers);
     Context::set('oembed_host_whitelist', $hostStatus);

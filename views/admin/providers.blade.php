@@ -57,7 +57,7 @@
   <input type="hidden" name="success_return_url" value="{{ getCurrentPageUrl() }}" />
 
   <div class="x_page-content">
-    <table class="x_table x_table-striped oembed-providers-table">
+    <table class="x_table oembed-providers-table">
       <colgroup>
         <col style="width: 48px;" />
         <col style="width: 140px;" />
@@ -158,7 +158,9 @@
     border-radius: 3px; font-size: 0.85em; line-height: 1.4;
     border: 1px solid transparent;
   }
-  .oembed-host-badge.is-allowed { background: #e6f4ea; color: #1e8e3e; border-color: #c8e6c9; }
+  /* 등록된 호스트는 한 줄에 여러 개가 늘어서면 배경 뱃지가 시각적 노이즈로 작용한다.
+     이쪽은 ✓ 글자색만 남기고, 미등록(주의가 필요한) 호스트만 배경으로 강조한다. */
+  .oembed-host-badge.is-allowed { color: #1e8e3e; padding-left: 0; padding-right: 0; }
   .oembed-host-badge.is-pending { background: #fce8e6; color: #c5221f; border-color: #f5c6cb; }
 
   .oembed-help { margin: 12px 0 0; color: #666; font-size: 0.92em; }

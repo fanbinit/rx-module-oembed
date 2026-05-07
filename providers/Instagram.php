@@ -21,7 +21,7 @@ class Instagram extends Provider
   public bool $oembed = false;
   public array $hosts = ['www.instagram.com', 'instagram.com'];
   public array $patterns = [
-    '#(?:https?:)?//(?:www\.)?instagram\.com/(?:p|reel|reels|tv)/([\w-]+)#i' => ['shortcode'],
+    '~(?:https?:)?//(?:www\.)?instagram\.com/(p|reel|reels|tv)/([\w-]+)~i' => ['kind', 'shortcode'],
   ];
 
   public function buildEmbed(array $matchData, ?int $width = null, ?int $height = null): string
@@ -30,7 +30,16 @@ class Instagram extends Provider
     if ($shortcode === '') {
       return '';
     }
-    $permalink = 'https://www.instagram.com/p/' . rawurlencode($shortcode) . '/';
+    // 경로 타입을 그대로 보존해 permalink 를 만든다. Instagram 공식 임베드 스니펫이
+    // reel 은 `/reel/`, 일반 게시물은 `/p/` 를 쓰고, embed.js 는 이 permalink 에
+    // `/embed/captioned/` 를 붙여 iframe src 를 만든다 — 경로가 reel 인 경우에만
+    // 세로형 reel 레이아웃이 안정적으로 잡히고, 잘못된 경로로 요청하면 Instagram
+    // 이 "이 사진 또는 동영상의 링크가 잘못되었습니다" broken 뷰를 돌려주는
+    // 케이스가 있다. `/reels/` (복수) 는 embed 엔드포인트가 404 라 `reel` 로
+    // 정규화하고, `tv` (구 IGTV) 는 그대로 둬도 200.
+    $kind = strtolower((string) ($matchData['captures']['kind'] ?? 'p'));
+    $pathSegment = $kind === 'reels' ? 'reel' : $kind;
+    $permalink = 'https://www.instagram.com/' . $pathSegment . '/' . rawurlencode($shortcode) . '/';
     $hrefHtml = htmlspecialchars($permalink, ENT_QUOTES, 'UTF-8');
 
     return sprintf(

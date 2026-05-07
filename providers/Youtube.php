@@ -57,11 +57,15 @@ class Youtube extends Provider
     // 반영해서 응답하므로(Shorts 9:16, 21:9 시네마틱 등 포함), 이 값을 그대로
     // iframe width/height 으로 쓰면 비율이 자동으로 맞는다. YouTube oEmbed 는
     // maxwidth 와 maxheight 가 *둘 다* 지정될 때만 그 한도를 적용한다 — 한쪽만
-    // 주면 무시하고 356x200 같은 작은 기본값으로 응답한다. 854x480 (16:9 480p
-    // 표준 — YouTube 의 default 임베드 크기와 같음) 으로 잡아 일반적인 본문
-    // 폭(720~1000) 안에 fit. 더 작은 컨테이너는 buildEmbed 의 inline aspect-ratio
-    // / max-width 가 처리한다.
-    $endpoint = 'https://www.youtube.com/oembed?url=' . rawurlencode($url) . '&maxwidth=854&maxheight=480&format=json';
+    // 주면 무시하고 356x200 같은 작은 기본값으로 응답한다.
+    //
+    // maxheight=720 인 이유: Shorts(9:16) 의 경우 height 가 width 의 cap 을
+    // 결정한다. maxheight 가 480 이면 응답이 270x480 으로 와서 본문에서 iframe
+    // 이 270px 만 차지해 손바닥 크기로 보인다. 720 이면 405x720 — 데스크톱
+    // 본문 폭(720~1000)에 적당히 들어맞고 모바일은 buildEmbed 의 max-width:100%
+    // 가 비율을 유지하며 자동 축소한다. 가로 16:9 영상은 854x480 으로 그대로
+    // 응답 (480 < 720 이라 height 제약 안 걸림, maxwidth=854 가 width 를 cap).
+    $endpoint = 'https://www.youtube.com/oembed?url=' . rawurlencode($url) . '&maxwidth=854&maxheight=720&format=json';
     $payload = RemoteFetcher::fetchJson($endpoint);
     if ($payload === null) {
       return null;

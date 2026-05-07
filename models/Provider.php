@@ -57,6 +57,23 @@ abstract class Provider
   }
 
   /**
+   * 매칭된 콘텐츠의 effective 타입을 돌려준다. 기본은 provider 의 정적 $type 을
+   * 그대로 반환. 동일 provider 가 여러 콘텐츠 종류를 처리하는 경우(예: Facebook
+   * — 일반 포스트는 social, 릴은 multimedia) 매칭별로 다른 타입을 돌려주도록
+   * override 해서 wrapper 의 `data-oembed-type` 가 콘텐츠에 맞게 박히도록 한다.
+   * 이 값은 글 보기 페이지의 CSS 분기 (social=라벨 박스, multimedia=라운드된
+   * iframe) 에 직결된다.
+   *
+   * Controller 는 paste 응답의 wrapper 작성 시점에 한 번만 호출.
+   *
+   * @param array{pattern: string, captures: array<string,string>, url: string} $matchData
+   */
+  public function resolveType(array $matchData): string
+  {
+    return $this->type;
+  }
+
+  /**
    * URL 에 대해 외부 메타정보를 가져온다 (oEmbed endpoint, 자체 API 등).
    *
    * Controller 가 Registry::match hit 직후, buildEmbed 호출 전에 한 번 호출한다.

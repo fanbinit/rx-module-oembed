@@ -211,7 +211,12 @@
         }
       } else {
         debug('fetch failed:', url, resp);
-        if (host) {
+        // 서버가 provider 식별자를 함께 내려주면 호스트는 알려진 provider 가
+        // 처리하는 도메인이고 이번 실패는 transient (예: Facebook share URL 의
+        // redirect resolve 일시 차단) 라는 신호다. 1시간 짜리 host blacklist 에
+        // 올리면 그 사이 같은 호스트의 다른 URL paste 도 조용히 차단되므로,
+        // 이 경우엔 placeholder 만 제거하고 다음 paste 에서 다시 시도하게 둔다.
+        if (host && !resp.provider) {
           rememberFailedHost(host);
         }
         removePlaceholder(editor, url);
