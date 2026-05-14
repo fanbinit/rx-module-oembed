@@ -84,7 +84,7 @@ class Vimeo extends Provider
 | --- | --- | --- |
 | `$name` | `string` | 어드민에 표시할 이름 |
 | `$type` | `'multimedia' \| 'social'` | 미지정 크기 시 16:9 / 4:3 비율 결정 |
-| `$oembed` | `bool` | true 면 oEmbed 엔드포인트 호출 (현재 v0.x 에서는 직접 임베드만) |
+| `$oembed` | `bool` | 예약 필드 (현재 Controller 미참조 — oEmbed/메타데이터 연동은 `fetchInfo()` 오버라이드로 구현) |
 | `$hosts` | `string[]` | iframe whitelist 자동 등록 대상 |
 | `$patterns` | `array<string, string[]>` | PCRE 패턴 → 캡처 그룹 이름 |
 

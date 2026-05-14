@@ -26,7 +26,16 @@ class Youtube extends Provider
     if ($videoId === '') {
       return '';
     }
-    [$w, $h] = $this->getDimensions($width, $height);
+    // Shorts(/shorts/<id>)는 세로 9:16 영상이지만 YouTube oEmbed 는 Shorts URL
+    // 에도 가로 16:9(854x480)를 응답한다 — fetchInfo 로는 세로 비율을 알 수
+    // 없으므로, /shorts/ 로 paste 된 케이스는 oEmbed 가 채운 width/height 을
+    // 무시하고 9:16 을 강제한다 (Facebook 릴 처리와 동일한 방식). watch?v= /
+    // youtu.be 로 paste 된 Shorts 는 URL 만으로 구분되지 않는 한계가 있다.
+    if (preg_match('~youtube\.com/shorts/~i', $matchData['url'] ?? '')) {
+      [$w, $h] = [405, 720];
+    } else {
+      [$w, $h] = $this->getDimensions($width, $height);
+    }
     $src = 'https://www.youtube.com/embed/' . rawurlencode($videoId);
     // aspect-ratio 는 CSS spec 상 <width>/<height> 도 받지만 Rhymix HTMLFilter
     // (common/framework/filters/HTMLFilter.php:504) 가 허용하는 값은 (a) 단일
@@ -53,19 +62,16 @@ class Youtube extends Provider
 
   public function fetchInfo(string $url): ?array
   {
-    // 공식 oEmbed endpoint — 키 발급 불필요. width/height 은 영상의 실제 비율을
-    // 반영해서 응답하므로(Shorts 9:16, 21:9 시네마틱 등 포함), 이 값을 그대로
-    // iframe width/height 으로 쓰면 비율이 자동으로 맞는다. YouTube oEmbed 는
-    // maxwidth 와 maxheight 가 *둘 다* 지정될 때만 그 한도를 적용한다 — 한쪽만
-    // 주면 무시하고 356x200 같은 작은 기본값으로 응답한다.
-    //
-    // maxheight=720 인 이유: Shorts(9:16) 의 경우 height 가 width 의 cap 을
-    // 결정한다. maxheight 가 480 이면 응답이 270x480 으로 와서 본문에서 iframe
-    // 이 270px 만 차지해 손바닥 크기로 보인다. 720 이면 405x720 — 데스크톱
-    // 본문 폭(720~1000)에 적당히 들어맞고 모바일은 buildEmbed 의 max-width:100%
-    // 가 비율을 유지하며 자동 축소한다. 가로 16:9 영상은 854x480 으로 그대로
-    // 응답 (480 < 720 이라 height 제약 안 걸림, maxwidth=854 가 width 를 cap).
-    $endpoint = 'https://www.youtube.com/oembed?url=' . rawurlencode($url) . '&maxwidth=854&maxheight=720&format=json';
+    // 공식 oEmbed endpoint — 키 발급 불필요. 두 가지 용도로 쓴다:
+    //   - thumbnail_url → ImageAttacher 로 본문 첨부 등록 (게시판 자동 섬네일 등).
+    //   - width/height → 가로 영상 iframe 의 기본 dimension.
+    // 주의: YouTube oEmbed 는 Shorts URL 에도 가로 16:9(854x480)를 응답하고 세로
+    // 9:16 은 알려주지 않는다. 따라서 Shorts 비율 처리는 buildEmbed 가 URL 패턴
+    // 으로 직접 하며, 여기서 받는 width/height 은 가로 영상 한정으로만 의미가 있다.
+    // maxwidth 와 maxheight 는 *둘 다* 지정해야 한도가 적용된다 — 한쪽만 주거나
+    // 아예 없으면 200x113 / 356x200 같은 작은 기본값으로 응답한다. 854x480 (16:9
+    // 480p 표준) 으로 받아 일반적인 본문 폭(720~1000) 안에 fit 시킨다.
+    $endpoint = 'https://www.youtube.com/oembed?url=' . rawurlencode($url) . '&maxwidth=854&maxheight=480&format=json';
     $payload = RemoteFetcher::fetchJson($endpoint);
     if ($payload === null) {
       return null;

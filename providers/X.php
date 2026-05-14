@@ -43,9 +43,14 @@ class X extends Provider
     }
     $username = $matchData['captures']['username'] ?? '';
 
+    // username 이 없을 때 '/i/web/status/' 를 그대로 쓰면 widgets.js 의
+    // 퍼머링크 정규식(\w+/status(?:es)?/\d+)에 매칭되지 않아 blockquote 가
+    // 트윗으로 변환되지 않는다 ('i' 뒤가 '/web' 이라 '/status' 와 어긋남).
+    // '/i/status/' 형태로 출력하면 'i' 가 screen_name 자리를 채워 정규식이
+    // 매칭되고, 이 URL 은 X 에서도 유효하게 동작한다.
     $tweetUrl = $username !== ''
       ? 'https://twitter.com/' . rawurlencode($username) . '/status/' . rawurlencode($tweetId)
-      : 'https://twitter.com/i/web/status/' . rawurlencode($tweetId);
+      : 'https://twitter.com/i/status/' . rawurlencode($tweetId);
     $hrefHtml = htmlspecialchars($tweetUrl, ENT_QUOTES, 'UTF-8');
     $idHtml = htmlspecialchars($tweetId, ENT_QUOTES, 'UTF-8');
 

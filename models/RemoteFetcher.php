@@ -256,7 +256,19 @@ class RemoteFetcher
     }
     $ips = [];
     foreach ($records as $record) {
-      $ip = $record['ip'] ?? ($record['ipv6'] ?? '');
+      // dns_get_record 는 DNS_A|DNS_AAAA 로 질의해도 시스템 리졸버/DNS 서버에
+      // 따라 CNAME 같은 비-주소 레코드를 결과에 함께 담을 수 있다 (특히
+      // www.youtube.com 처럼 CNAME 으로 시작하는 호스트). 무조건 ip 필드를
+      // 기대하면 CNAME 레코드에서 빈 문자열을 만나 호스트 전체가 unsafe 로
+      // 오판된다. A/AAAA 만 추려서 검증하고 그 외 레코드는 건너뛴다.
+      $type = $record['type'] ?? '';
+      if ($type === 'A') {
+        $ip = $record['ip'] ?? '';
+      } elseif ($type === 'AAAA') {
+        $ip = $record['ipv6'] ?? '';
+      } else {
+        continue;
+      }
       if ($ip === '' || !self::isPublicIp($ip)) {
         return null;
       }
@@ -322,13 +334,24 @@ class RemoteFetcher
    * cURL CURLOPT_RESOLVE entry 형식 (`host:port:ip`) 으로 변환한다. IPv6 는
    * entry 형식 규약상 IP 부분을 대괄호로 감싼다 (`host:port:[::1]`).
    *
+   * CURLOPT_RESOLVE 에 IPv6 주소가 섞이면 IPv6 egress route 가 없는 서버에서
+   * cURL 이 연결 자체에 실패한다 — IPv4 entry 가 같이 있어도 폴백하지 못한다
+   * (실측 확인). 따라서 A 레코드(IPv4)가 하나라도 있으면 IPv4 만 핀하고,
+   * AAAA 만 있는 IPv6-only 호스트일 때만 IPv6 로 핀한다.
+   *
+   * SSRF 보장은 그대로다: resolveHostSafely 가 이미 v4·v6 전부 공인 IP 검증을
+   * 마쳤고(하나라도 사설/예약 IP 면 호스트 거부), 여기서는 그 검증된 집합의
+   * 부분집합만 핀하므로 cURL 은 검증된 IP 로만 connect 한다 — connect 시점
+   * 재조회가 없어 DNS rebinding TOCTOU 방어도 유지된다.
+   *
    * @param array<int,string> $ips
    * @return array<int,string>
    */
   private static function buildResolveEntries(string $host, int $port, array $ips): array
   {
+    $ipv4 = array_filter($ips, static fn($ip) => !str_contains($ip, ':'));
     $entries = [];
-    foreach ($ips as $ip) {
+    foreach (($ipv4 ?: $ips) as $ip) {
       $entries[] = sprintf('%s:%d:%s', $host, $port, str_contains($ip, ':') ? "[{$ip}]" : $ip);
     }
     return $entries;
